@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trò chơi đoán số (1–100)</title>
+  <style>
+    :root { --radius: 14px; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, Arial, sans-serif;
+      background: linear-gradient(135deg, #f6f8ff, #f2f6ff);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      margin: 0;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 560px;
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: 0 12px 30px rgba(0,0,0,.1);
+      padding: 24px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+    }
+    p.sub {
+      margin: 0 0 16px;
+      color: #666;
+      font-size: 14px;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin: 10px 0 16px;
+    }
+    .seg {
+      display: inline-flex;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #f9fafb;
+    }
+    .seg button {
+      border: 0;
+      background: transparent;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .seg button.active {
+      background: #111827;
+      color: #fff;
+    }
+    .stat {
+      display: flex; gap: 10px; flex-wrap: wrap; color: #374151;
+      font-size: 14px;
+    }
+    .badge {
+      background: #f3f4f6; padding: 6px 10px; border-radius: 999px;
+    }
+    input[type="number"] {
+      width: 110px; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px;
+      font-size: 16px;
+    }
+    button.primary {
+      padding: 10px 16px; border: 0; border-radius: 10px; cursor: pointer; font-weight: 700;
+      background: #2563eb; color: #fff;
+    }
+    button.secondary {
+      padding: 10px 16px; border: 1px solid #e5e7eb; border-radius: 10px; cursor: pointer; font-weight: 700;
+      background: #fff; color: #111827;
+    }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .message { margin: 12px 0 6px; font-size: 16px; min-height: 24px; }
+    .history { color: #6b7280; font-size: 14px; min-height: 20px; }
+    .hr { height: 1px; background: #f1f5f9; margin: 16px 0; border: 0; }
+    .footer { display: flex; gap: 10px; flex-wrap: wrap; }
+    .ok { color: #16a34a; }
+    .warn { color: #d97706; }
+    .err { color: #dc2626; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🎮 Trò chơi đoán số (1–100)</h1>
+    <p class="sub">Chọn độ khó trước khi chơi nhé!</p>
+
+    <!-- Độ khó -->
+    <div class="row" aria-label="Chọn độ khó">
+      <div class="seg" id="difficultySeg">
+        <button data-tries="10" class="active" aria-pressed="true">Dễ</button>
+        <button data-tries="6" aria-pressed="false">Trung bình</button>
+        <button data-tries="3" aria-pressed="false">Khó</button>
+      </div>
+      <div class="stat">
+        <span class="badge">Lượt tối đa: <b id="maxTries">10</b></span>
+        <span class="badge">Còn lại: <b id="leftTries">10</b></span>
+      </div>
+    </div>
+
+    <!-- Nhập đoán -->
+    <div class="row">
+      <input type="number" id="guessInput" min="1" max="100" placeholder="Nhập 1–100" />
+      <button class="primary" id="btnGuess">Đoán</button>
+      <button class="secondary" id="btnRestart" style="display:none;">Chơi lại</button>
+    </div>
+
+    <div class="message" id="message" aria-live="polite"></div>
+    <div class="history" id="history"></div>
+
+    <hr class="hr" />
+
+    <!-- Thống kê phiên chơi (tính trong lần mở trang) -->
+    <div class="row">
+      <div class="stat">
+        <span class="badge">Ván đã chơi: <b id="played">0</b></span>
+        <span class="badge">Ván thắng: <b id="won">0</b></span>
+      </div>
+    </div>
+    <div class="footer">
+      <small>Tip: nhập số xong bấm <b>Enter</b> để đoán nhanh.</small>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <script>
+    // Trạng thái game
+    let secret = 0;
+    let maxTries = 10;
+    let attempts = 0;
+    let guesses = [];
+    let played = 0;
+    let won = 0;
+
+    // Phần tử DOM
+    const seg = document.getElementById('difficultySeg');
+    const maxTriesEl = document.getElementById('maxTries');
+    const leftTriesEl = document.getElementById('leftTries');
+    const inputEl = document.getElementById('guessInput');
+    const msgEl = document.getElementById('message');
+    const historyEl = document.getElementById('history');
+    const btnGuess = document.getElementById('btnGuess');
+    const btnRestart = document.getElementById('btnRestart');
+    const playedEl = document.getElementById('played');
+    const wonEl = document.getElementById('won');
+
+    // Khởi tạo
+    bindEvents();
+    startGame();
+
+    function bindEvents() {
+      // Chọn độ khó bằng segmented buttons
+      seg.addEventListener('click', (e) => {
+        if (e.target.tagName !== 'BUTTON') return;
+        for (const b of seg.querySelectorAll('button')) {
+          b.classList.remove('active');
+          b.setAttribute('aria-pressed', 'false');
+        }
+        e.target.classList.add('active');
+        e.target.setAttribute('aria-pressed', 'true');
+
+        maxTries = parseInt(e.target.dataset.tries, 10);
+        startGame(); // đổi độ khó -> bắt đầu ván mới luôn
+      });
+
+      // Nút đoán
+      btnGuess.addEventListener('click', makeGuess);
+
+      // Enter để đoán nhanh
+      inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') makeGuess();
+      });
+
+      // Nút chơi lại
+      btnRestart.addEventListener('click', startGame);
+    }
+
+    function startGame() {
+      secret = Math.floor(Math.random() * 100) + 1; // 1..100
+      attempts = 0;
+      guesses = [];
+      maxTriesEl.textContent = maxTries;
+      leftTriesEl.textContent = maxTries;
+      msgEl.innerHTML = 'Hãy nhập số bạn đoán!';
+      historyEl.textContent = '';
+      inputEl.value = '';
+      inputEl.disabled = false;
+      btnGuess.disabled = false;
+      btnRestart.style.display = 'none';
+      inputEl.focus();
+      // console.log('secret:', secret); // debug nếu cần
+    }
+
+    function makeGuess() {
+      const raw = inputEl.value.trim();
+      const guess = Number(raw);
+
+      // Kiểm tra hợp lệ
+      if (!raw) {
+        setMessage('⚠️ Vui lòng nhập số từ 1 đến 100!', 'warn');
+        return;
+      }
+      if (!Number.isInteger(guess)) {
+        setMessage('❌ Chỉ chấp nhận số nguyên từ 1 đến 100!', 'err');
+        return;
+      }
+      if (guess < 1 || guess > 100) {
+        setMessage('⚠️ Số phải nằm trong khoảng 1–100, nhập lại nhé!', 'warn');
+        return;
+      }
+
+      // Ghi nhận đoán hợp lệ
+      attempts++;
+      guesses.push(guess);
+      leftTriesEl.textContent = (maxTries - attempts);
+      historyEl.textContent = 'Bạn đã đoán: ' + guesses.join(', ');
+
+      // So sánh
+      if (guess === secret) {
+        setMessage('🎉 Chính xác! Số đúng là ' + secret, 'ok');
+        endGame(true);
+        return;
+      }
+
+      if (attempts >= maxTries) {
+        setMessage('😢 Hết lượt! Số đúng là ' + secret, 'err');
+        endGame(false);
+        return;
+      }
+
+      if (guess < secret) {
+        setMessage('🔽 Số quá thấp! Còn ' + (maxTries - attempts) + ' lượt.', 'warn');
+      } else {
+        setMessage('🔼 Số quá cao! Còn ' + (maxTries - attempts) + ' lượt.', 'warn');
+      }
+
+      inputEl.value = '';
+      inputEl.focus();
+    }
+
+    function endGame(isWin) {
+      btnGuess.disabled = true;
+      inputEl.disabled = true;
+      btnRestart.style.display = 'inline-block';
+      played++;
+      if (isWin) won++;
+      playedEl.textContent = played;
+      wonEl.textContent = won;
+    }
+
+    function setMessage(text, type) {
+      msgEl.className = 'message ' + (type || '');
+      msgEl.textContent = text;
+    }
+  </script>
+</body>
+</html>
