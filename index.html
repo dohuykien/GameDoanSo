@@ -236,11 +236,26 @@
         return;
       }
 
+//      if (guess < secret) {
+  //      setMessage('🔽 Số quá thấp! Còn ' + (maxTries - attempts) + ' lượt.', 'warn');
+    //  } else {
+      //  setMessage('🔼 Số quá cao! Còn ' + (maxTries - attempts) + ' lượt.', 'warn');
+      //}
+
       if (guess < secret) {
-        setMessage('🔽 Số quá thấp! Còn ' + (maxTries - attempts) + ' lượt.', 'warn');
+        if (secret - guess > 10) {
+          setMessage('🔽 Số quá thấp so với số đoán! Còn ' + (maxTries - attempts) + ' lượt.', 'warn');
+        } else {
+          setMessage('🔽 Số thấp hơn số đoán! Còn ' + (maxTries - attempts) + ' lượt.', 'warn');
+        }
       } else {
-        setMessage('🔼 Số quá cao! Còn ' + (maxTries - attempts) + ' lượt.', 'warn');
+        if (guess - secret > 10) {
+          setMessage('🔼 Số quá cao so với số đoán! Còn ' + (maxTries - attempts) + ' lượt.', 'warn');
+        } else {
+          setMessage('🔼 Số caohơn số đoán! Còn ' + (maxTries - attempts) + ' lượt.', 'warn');
+        }
       }
+
 
       inputEl.value = '';
       inputEl.focus();
